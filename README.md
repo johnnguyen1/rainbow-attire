@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Rainbow Attire
 
-## Getting Started
+B2B e-commerce platform for customized business apparel — Next.js rewrite of the legacy Angular app (`business-swag`), backed by the existing `corporate-threads` Firebase project.
 
-First, run the development server:
+## Architecture
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Next.js 16 (App Router)** with `output: 'export'` — the app builds to fully static files in `out/`, deployable to classic Firebase Hosting. There is no server runtime.
+- **Firebase Web SDK in the browser** for everything: Auth (email/password + email verification), Firestore (products, carts, orders, users, companies), Storage (company logos), and the existing `setCustomClaims` Cloud Function for role changes.
+- **Security lives in `firestore.rules` / `storage.rules`**, versioned in this repo.
+- **shadcn/ui + Tailwind CSS** for the UI.
+
+Because the export is static, dynamic resources use query params instead of path params (`/products/detail/?id=…`, `/orders/confirmation/?orderId=…`).
+
+### Key directories
+
+```
+src/
+├── app/                  # Routes (all client components)
+│   ├── (auth)/auth/      # login, register, forgot-password, verification-pending
+│   ├── (shop)/           # products, cart, orders, account (requires verified user)
+│   ├── manager/          # company order dashboard, products, users (manager/admin)
+│   └── admin/            # products, companies, users (admin only)
+├── components/           # UI components, AuthProvider, CartProvider, guards
+└── lib/
+    ├── firebase-client.ts# Firebase SDK initialization
+    └── services/         # Firestore/Storage data access
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Roles
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **user** — browse company catalog, cart, place/cancel orders, profile
+- **manager** — plus company order lifecycle (approve → processing → shipped → delivered), tracking info, CSV exports, company user management
+- **admin** — plus product catalog management (JSON import, CSV buyer costs), company management with logo uploads, and user role management
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Role changes go through a single path (`lib/services/roles.ts`) that updates both the Firestore profile and Firebase Auth custom claims via the deployed `setCustomClaims` function, fixing the role-drift bug in the legacy app.
 
-## Learn More
+## Development
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+pnpm install
+cp .env.example .env.local   # fill in the Firebase web app config
+pnpm dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deployment
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+pnpm build                          # writes static site to out/
+firebase deploy --only hosting      # deploy the app
+firebase deploy --only firestore:rules,storage   # deploy security rules
+```
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The Firebase project is configured in `.firebaserc` (`corporate-threads`).
